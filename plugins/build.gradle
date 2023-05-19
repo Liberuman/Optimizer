@@ -1,0 +1,44 @@
+apply plugin: 'kotlin'
+apply plugin: 'java-gradle-plugin'
+apply plugin: 'maven-publish'
+
+buildscript {
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.31"
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    //implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.6.10"
+    implementation("com.tinify:tinify:1.8.0")
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+
+            pluginMaven(MavenPublication) {
+                groupId = 'com.sxu.plugins'
+                artifactId = 'imageoptimizer'
+                version = '0.1'
+            }
+
+            pluginMaven(MavenPublication) {
+                groupId = 'com.sxu.plugins'
+                artifactId = 'upload'
+                version = '0.1'
+            }
+        }
+    }
+}
