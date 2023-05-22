@@ -4,22 +4,6 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <compositeConfiguration>
-          <compositeBuild compositeDefinitionSource="SCRIPT">
-            <builds>
-              <build path="$PROJECT_DIR$/imageoptimizer" name="imageoptimizer">
-                <projects>
-                  <project path="$PROJECT_DIR$/imageoptimizer" />
-                </projects>
-              </build>
-              <build path="$PROJECT_DIR$/upload" name="upload">
-                <projects>
-                  <project path="$PROJECT_DIR$/upload" />
-                </projects>
-              </build>
-            </builds>
-          </compositeBuild>
-        </compositeConfiguration>
         <option name="testRunner" value="GRADLE" />
         <option name="distributionType" value="DEFAULT_WRAPPED" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />

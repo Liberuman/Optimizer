@@ -14,11 +14,6 @@ buildscript {
     }
 }
 
-repositories {
-    google()
-    mavenCentral()
-}
-
 dependencies {
     //implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.6.10"
     implementation("com.tinify:tinify:1.8.0")
