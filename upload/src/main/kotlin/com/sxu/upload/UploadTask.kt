@@ -1,18 +1,7 @@
 package com.sxu.upload
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import com.tinify.Tinify
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
-import java.io.File
-import java.io.InputStreamReader
-import java.math.BigInteger
-import java.nio.charset.Charset
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.security.MessageDigest
-import java.text.DecimalFormat
 
 /*******************************************************************************
  * 图片压缩实现过程
