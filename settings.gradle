@@ -13,6 +13,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Optimizer"
-include ':app'
 includeBuild('imageoptimizer')
 includeBuild('upload')
