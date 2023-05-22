@@ -7,9 +7,14 @@
         <compositeConfiguration>
           <compositeBuild compositeDefinitionSource="SCRIPT">
             <builds>
-              <build path="$PROJECT_DIR$/plugins" name="plugins">
+              <build path="$PROJECT_DIR$/imageoptimizer" name="imageoptimizer">
                 <projects>
-                  <project path="$PROJECT_DIR$/plugins" />
+                  <project path="$PROJECT_DIR$/imageoptimizer" />
+                </projects>
+              </build>
+              <build path="$PROJECT_DIR$/upload" name="upload">
+                <projects>
+                  <project path="$PROJECT_DIR$/upload" />
                 </projects>
               </build>
             </builds>
@@ -24,7 +29,8 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/plugins" />
+            <option value="$PROJECT_DIR$/imageoptimizer" />
+            <option value="$PROJECT_DIR$/upload" />
           </set>
         </option>
       </GradleProjectSettings>

@@ -27,17 +27,10 @@ dependencies {
 afterEvaluate {
     publishing {
         publications {
-
             pluginMaven(MavenPublication) {
                 groupId = 'com.sxu.plugins'
-                artifactId = 'imageoptimizer'
-                version = '0.1'
-            }
-
-            pluginMaven(MavenPublication) {
-                groupId = 'com.sxu.plugins'
-                artifactId = 'upload'
-                version = '0.1'
+                artifactId = 'imageOptimizer'
+                version = '0.13'
             }
         }
     }
