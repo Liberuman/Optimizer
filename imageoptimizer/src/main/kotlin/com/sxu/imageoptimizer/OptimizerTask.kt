@@ -1,7 +1,9 @@
 package com.sxu.imageoptimizer
 
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import com.tinify.Options
 import com.tinify.Tinify
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
@@ -30,10 +32,6 @@ open class OptimizerTask : DefaultTask() {
      */
     private val allImagePathList = mutableSetOf<String>()
 
-    init {
-        group = "optimizer"
-    }
-
     @TaskAction
     fun run() {
         val config = project.extensions.getByName("optimizerConfig") as? OptimizerConfig?
@@ -59,7 +57,7 @@ open class OptimizerTask : DefaultTask() {
 
         // 获取已优化的图片信息
         var optimizedList = mutableListOf<ImageInfo>()
-        val optimizedListFile = File("${project.projectDir}/compressedList.json")
+        val optimizedListFile = File("${project.rootDir}/compressedList.json")
         if (optimizedListFile.exists()) {
             try {
                 val reader = InputStreamReader(optimizedListFile.inputStream())
@@ -84,7 +82,19 @@ open class OptimizerTask : DefaultTask() {
         } else {
             waitOptimizerDirs.addAll(config.resourceDirs)
         }
-        log("optimize target directory: ${Gson().toJson(waitOptimizerDirs)}")
+        log(
+            "\nWaiting optimized directory: ${
+                GsonBuilder().setPrettyPrinting().create().toJson(waitOptimizerDirs)
+            }"
+        )
+
+        if (config.convertToWebP) {
+            convertToWebP(waitOptimizerDirs, config.whiteList)
+            if (config.onlyConvert) {
+                log("All pictures have converted to webP...")
+                return
+            }
+        }
 
         var beforeSize = 0L
         var afterSize = 0L
@@ -116,9 +126,11 @@ open class OptimizerTask : DefaultTask() {
             optimizedListFile.createNewFile()
         }
         optimizedListFile.writeText(Gson().toJson(optimizedList), Charset.forName("utf-8"))
-        log("Task finished! optimized ${newOptimizedList.size} files, before total size: ${
-            beforeSize.formatSize()
-        }, after total size: ${afterSize.formatSize()}")
+        log(
+            "Task finished! optimized ${newOptimizedList.size} files, before total size: ${
+                beforeSize.formatSize()
+            }, after total size: ${afterSize.formatSize()}, decreased ${(afterSize - beforeSize).formatSize()}"
+        )
     }
 
     /**
@@ -145,7 +157,7 @@ open class OptimizerTask : DefaultTask() {
      * 查找所有图片的路径
      */
     private fun findAllImageDirs() {
-        project.allprojects.forEach {
+        project.rootProject.allprojects.forEach {
             // 在每个模块的assets文件夹中查找包含图片的路径
             File("${project.rootDir.path}/${it.name}/src/main/assets").apply {
                 if (exists()) {
@@ -189,6 +201,36 @@ open class OptimizerTask : DefaultTask() {
     }
 
     /**
+     * 将指定路径的图片转换为WebP格式
+     * @param targetDirs: 要转换的图片目录
+     */
+    private fun convertToWebP(targetDirs: List<String>, whiteList: List<String>?) {
+        for (dir in targetDirs) {
+            val file = File(dir)
+            if (!file.exists() || !file.isDirectory) {
+                continue
+            }
+
+            file.listFiles().asSequence().filter {
+                it.isImageFile()
+                        && !it.name.toLowerCase().endsWith(".webp")
+                        && whiteList?.contains(it.name) != true
+            }.forEach {
+                try {
+                    val result = Tinify.fromFile(it.path).convert(
+                        Options()
+                            .with("type", arrayOf("image/webp"))
+                    )
+                        .result()
+                    result.toFile("${it.parent}/${it.nameWithoutExtension}.${result.extension()}")
+                } catch (e: Exception) {
+                    log(e.message ?: "Occur a exception")
+                }
+            }
+        }
+    }
+
+    /**
      * 开始优化
      * @param targetDirectory: 待优化的目录
      * @param config: 优化配置
@@ -203,31 +245,41 @@ open class OptimizerTask : DefaultTask() {
         // 只有不包含在白名单和已优化列表中, 且图片大小大于skipSize的图片才可进行优化
         targetDirectory.listFiles().asSequence().filter {
             it.isImageFile()
-            && it.length() > config.skipSize
-            && config.whiteList?.contains(it.name) != true
-            && optimizedList?.find { it1 -> it1.path == it.path }.run {
+                    && it.length() > config.skipSize
+                    && config.whiteList?.contains(it.name) != true
+                    && optimizedList?.find { it1 -> it1.path == it.path }.run {
                 this == null || md5 != it.getFileMd5()
             }
         }.apply {
             for (file in this) {
                 log("Find target picture -> ${file.path}")
                 val beforeSize = file.length()
-                val optimizedFile = Tinify.fromFile(file.path).result()
-                if (beforeSize > 0) {
-                    val compressRatio = (beforeSize - optimizedFile.size()) * 100.0f / beforeSize
-                    // 图片压缩率低于指定阈值时，忽略压缩结果
-                    if (compressRatio >= 0 && compressRatio < config.compressRatioThreshold) {
-                        continue
+                try {
+                    val optimizedFile = Tinify.fromFile(file.path).result()
+                    if (beforeSize > 0) {
+                        val compressRatio =
+                            (beforeSize - optimizedFile.size()) * 100.0f / beforeSize
+                        // 图片压缩率低于指定阈值时，忽略压缩结果
+                        if (compressRatio >= 0 && compressRatio < config.compressRatioThreshold) {
+                            continue
+                        }
                     }
+
+                    optimizedFile.toFile("${file.path}")
+
+                    val imageInfo = ImageInfo(
+                        path = file.path,
+                        beforeSize = beforeSize,
+                        afterSize = optimizedFile.size().toLong(),
+                        md5 = file.getFileMd5()
+                    )
+                    result.optimizedList.add(imageInfo)
+                    result.beforeSize += imageInfo.beforeSize
+                    result.afterSize += optimizedFile.size()
+                } catch (e: Exception) {
+                    log(e.message ?: "Occur a exception")
+                    break
                 }
-
-                optimizedFile.toFile("${file.path}")
-
-                val imageInfo = ImageInfo(path = file.path, beforeSize = beforeSize, afterSize = optimizedFile.size().toLong(),
-                    md5 = file.getFileMd5())
-                result.optimizedList.add(imageInfo)
-                result.beforeSize += imageInfo.beforeSize
-                result.afterSize += optimizedFile.size()
             }
         }
 
@@ -250,7 +302,9 @@ open class OptimizerTask : DefaultTask() {
      */
     private fun File.isImageFile(): Boolean {
         return path.toLowerCase().run {
-            endsWith(".webp") || (endsWith(".png") && !contains(".9.")) || endsWith(".jpg") || endsWith(".jpeg")
+            endsWith(".webp") || (endsWith(".png") && !contains(".9.")) || endsWith(".jpg") || endsWith(
+                ".jpeg"
+            )
         }
     }
 

@@ -24,7 +24,7 @@ afterEvaluate {
             pluginMaven(MavenPublication) {
                 groupId = 'com.sxu.plugins'
                 artifactId = 'imageOptimizer'
-                version = '0.13'
+                version = '0.14'
             }
         }
     }
