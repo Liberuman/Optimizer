@@ -3,8 +3,7 @@ package com.sxu.imageoptimizer
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
-import com.tinify.Options
-import com.tinify.Tinify
+import com.tinify.*
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
 import java.io.File
@@ -15,6 +14,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.security.MessageDigest
 import java.text.DecimalFormat
+import kotlin.Exception
 
 /*******************************************************************************
  * 图片压缩实现过程
@@ -31,6 +31,10 @@ open class OptimizerTask : DefaultTask() {
      * 所有图片的路径
      */
     private val allImagePathList = mutableSetOf<String>()
+
+    init {
+        group = "optimizer"
+    }
 
     @TaskAction
     fun run() {
@@ -83,7 +87,7 @@ open class OptimizerTask : DefaultTask() {
             waitOptimizerDirs.addAll(config.resourceDirs)
         }
         log(
-            "\nWaiting optimized directory: ${
+            "Waiting optimized directory: ${
                 GsonBuilder().setPrettyPrinting().create().toJson(waitOptimizerDirs)
             }"
         )
@@ -99,6 +103,7 @@ open class OptimizerTask : DefaultTask() {
         var beforeSize = 0L
         var afterSize = 0L
         log("Start Optimize...")
+        var overLimit = false
         val newOptimizedList = mutableListOf<ImageInfo>()
         for (dir in waitOptimizerDirs) {
             val file = File(dir)
@@ -107,6 +112,12 @@ open class OptimizerTask : DefaultTask() {
             }
 
             val optimizeResult = startOptimize(file, config, optimizedList)
+            // 如果免费次数已用完, 直接退出
+            if (optimizeResult.overLimit) {
+                overLimit = true
+                break
+            }
+            // 如果没有找到满足条件的, 则压缩下一个目录
             if (optimizeResult.optimizedList.isNullOrEmpty()) {
                 continue
             }
@@ -117,7 +128,9 @@ open class OptimizerTask : DefaultTask() {
         }
 
         if (newOptimizedList.isEmpty()) {
-            log("No picture need compress!!!")
+            if (!overLimit) {
+                log("No picture need compress!!!")
+            }
             return
         }
 
@@ -252,10 +265,10 @@ open class OptimizerTask : DefaultTask() {
             }
         }.apply {
             for (file in this) {
-                log("Find target picture -> ${file.path}")
                 val beforeSize = file.length()
                 try {
                     val optimizedFile = Tinify.fromFile(file.path).result()
+                    log("Find target picture -> ${file.path}")
                     if (beforeSize > 0) {
                         val compressRatio =
                             (beforeSize - optimizedFile.size()) * 100.0f / beforeSize
@@ -276,6 +289,10 @@ open class OptimizerTask : DefaultTask() {
                     result.optimizedList.add(imageInfo)
                     result.beforeSize += imageInfo.beforeSize
                     result.afterSize += optimizedFile.size()
+                } catch(e: AccountException) {
+                    result.overLimit = true
+                    log(e.message ?: "Occur a exception")
+                    break
                 } catch (e: Exception) {
                     log(e.message ?: "Occur a exception")
                     break

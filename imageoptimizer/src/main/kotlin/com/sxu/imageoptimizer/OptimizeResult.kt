@@ -10,16 +10,24 @@ package com.sxu.imageoptimizer
  * Copyright: all rights reserved by Freeman.
  *******************************************************************************/
 data class OptimizeResult(
+
+    /**
+     * 是否超过每月的压缩限制
+     */
+    var overLimit: Boolean = false,
+
     /**
      * 优化前的大小
      */
     var beforeSize: Long = 0L,
+
     /**
      * 优化后的大小
      */
     var afterSize: Long = 0L,
+
     /**
      * 优化过的对象列表
      */
-    var optimizedList: MutableList<ImageInfo> = mutableListOf()
+    val optimizedList: MutableList<ImageInfo> = mutableListOf()
 )

@@ -15,7 +15,7 @@ import org.gradle.api.tasks.TaskAction
 open class UploadTask : DefaultTask() {
 
     init {
-        group = "optimizer"
+        group = "plugins"
     }
 
     @TaskAction
