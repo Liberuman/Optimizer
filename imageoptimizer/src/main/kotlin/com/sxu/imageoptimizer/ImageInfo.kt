@@ -1,7 +1,7 @@
 package com.sxu.imageoptimizer
 
 /*******************************************************************************
- * 图片的基本信息
+ * The basic information of the compressed image.
  *
  * @author: Freeman
  *
@@ -11,27 +11,27 @@ package com.sxu.imageoptimizer
  *******************************************************************************/
 data class ImageInfo(
     /**
-     * 图片路径
+     * The path of the image.
      */
-    val path : String = "",
+    val path: String = "",
 
     /**
-     * 压缩前的图片大小, 单位字节
+     *  The size of the image before compression, in bytes.
      */
     val beforeSize: Long = 0,
 
     /**
-     * 压缩后的图片大小, 单位字节
+     * The size of the image after compression, in bytes.
      */
-    val afterSize : Long = 0,
+    val afterSize: Long = 0,
 
     /**
-     * 图片路径的Md5值
+     * The MD5 hash value of the image path.
      */
     val md5: String = "",
 
     /**
-     * 该图片是否需要忽略，当大小小于配置的skipSize时不压缩
+     * Whether to ignore this image. When the size is smaller than the skipSize configured, it will not be compressed.
      */
     val ignore: Boolean = false,
 )

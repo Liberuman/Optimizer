@@ -1,7 +1,7 @@
 package com.sxu.imageoptimizer
 
 /*******************************************************************************
- * 优化结果
+ * The result of compression images
  *
  * @author: Freeman
  *
@@ -12,22 +12,22 @@ package com.sxu.imageoptimizer
 data class OptimizeResult(
 
     /**
-     * 是否超过每月的压缩限制
+     * The compression limit for the month is exceeded
      */
     var overLimit: Boolean = false,
 
     /**
-     * 优化前的大小
+     * Size before optimization
      */
     var beforeSize: Long = 0L,
 
     /**
-     * 优化后的大小
+     * Size after optimization
      */
     var afterSize: Long = 0L,
 
     /**
-     * 优化过的对象列表
+     * List of compressed ImageInfo objects
      */
     val optimizedList: MutableList<ImageInfo> = mutableListOf()
 )

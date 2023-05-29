@@ -1,7 +1,9 @@
 package com.sxu.imageoptimizer
 
 /*******************************************************************************
- * 支持压缩的图片格式
+ * An enumeration representing the image compression formats that are supported by this system.
+ * It includes support for all image formats, as well as specific support for JPEG, PNG,
+ * and WEBP formats.
  *
  * @author: Freeman
  *
@@ -12,22 +14,22 @@ package com.sxu.imageoptimizer
 enum class SupportFormatEnum(private val value: Int) {
 
     /**
-     * 支持压缩所有图片格式
+     * Support compression for all image formats
      */
     SUPPORT_ALL(0),
 
     /**
-     * 只支持JPEG格式压缩
+     * Only support JPEG compression
      */
     SUPPORT_JPEG_ONLY(1),
 
     /**
-     * 只支持PNG格式压缩
+     * Only support PNG compression
      */
     SUPPORT_PNG_ONLY(2),
 
     /**
-     * 只支持WEBP格式压缩
+     * Only support WEBP compression
      */
     SUPPORT_WEBP_ONLY(3),
 }

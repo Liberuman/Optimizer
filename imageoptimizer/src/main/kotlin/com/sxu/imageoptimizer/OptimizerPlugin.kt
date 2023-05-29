@@ -4,7 +4,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 
 /*******************************************************************************
- * 图片优化插件的实现
+ * The implements of compress images
  *
  * @author: Freeman
  *
@@ -12,7 +12,7 @@ import org.gradle.api.Project
  *
  * Copyright: all rights reserved by Freeman.
  *******************************************************************************/
-class OptimizerPlugin: Plugin<Project>{
+class OptimizerPlugin : Plugin<Project> {
 
     override fun apply(project: Project) {
         project.extensions.create("optimizerConfig", OptimizerConfig::class.java)

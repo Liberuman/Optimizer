@@ -3,9 +3,12 @@ package com.sxu.imageoptimizer
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
-import com.tinify.*
+import com.tinify.AccountException
+import com.tinify.Options
+import com.tinify.Tinify
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
+import org.gradle.internal.impldep.com.google.common.net.MediaType.*
 import java.io.File
 import java.io.InputStreamReader
 import java.math.BigInteger
@@ -14,10 +17,9 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.security.MessageDigest
 import java.text.DecimalFormat
-import kotlin.Exception
 
 /*******************************************************************************
- * 图片压缩实现过程
+ * The implementation process of image compression.
  *
  * @author: Freeman
  *
@@ -28,7 +30,7 @@ import kotlin.Exception
 open class OptimizerTask : DefaultTask() {
 
     /**
-     * 所有图片的路径
+     * The image paths to be optimized
      */
     private val allImagePathList = mutableSetOf<String>()
 
@@ -38,71 +40,69 @@ open class OptimizerTask : DefaultTask() {
 
     @TaskAction
     fun run() {
+        // Get the optimizer configuration
         val config = project.extensions.getByName("optimizerConfig") as? OptimizerConfig?
         if (config == null) {
-            log("Please config ImageOptimizer task")
+            log("Please configure the ImageOptimizer task")
             return
         }
-
+        // Check API key
         if (config.apiKey.isNullOrEmpty()) {
-            log("Not config apiKey")
+            log("API Key not configured")
             return
         }
-
+        // Validate configuration
         if (!config.isAppendMode && config.resourceDirs.isNullOrEmpty()) {
-            log("Config error: resourceDirs can't be empty when isAppendMode is false")
+            log("Configuration error: resourceDirs cannot be empty when isAppendMode is false")
             return
         }
-
+        // Check if the API key is valid
         if (!checkApiKey(config.apiKey)) {
-            log("TinyPng apiKey invalid")
+            log("Invalid TinyPng API Key")
             return
         }
-
-        // 获取已优化的图片信息
-        var optimizedList = mutableListOf<ImageInfo>()
+        // Retrieve the previously optimized image information
         val optimizedListFile = File("${project.rootDir}/compressedList.json")
-        if (optimizedListFile.exists()) {
+        val optimizedList = if (optimizedListFile.exists()) {
             try {
                 val reader = InputStreamReader(optimizedListFile.inputStream())
-                var tempList = Gson().fromJson<List<ImageInfo>>(
+                Gson().fromJson<List<ImageInfo>>(
                     reader,
                     object : TypeToken<List<ImageInfo>>() {}.type
-                )
-                if (!tempList.isNullOrEmpty()) {
-                    optimizedList.addAll(tempList)
-                }
+                ) ?: emptyList()
             } catch (e: Exception) {
                 e.printStackTrace(System.err)
+                emptyList()
             }
+        } else {
+            emptyList()
         }
-
-        // 根据配置获取待优化的路径
+        // Retrieve the list of directories to be optimized
         val waitOptimizerDirs = mutableListOf<String>()
         if (config.isAppendMode) {
-            findAllImageDirs()
+            findAllImageDirs(config.supportFormat)
             waitOptimizerDirs.addAll(allImagePathList.toList())
             waitOptimizerDirs.addAll(config.resourceDirs)
         } else {
             waitOptimizerDirs.addAll(config.resourceDirs)
         }
         log(
-            "Waiting optimized directory: ${
+            "Directories waiting for optimization: ${
                 GsonBuilder().setPrettyPrinting().create().toJson(waitOptimizerDirs)
             }"
         )
-
+        // Convert to WebP format if requested
         if (config.convertToWebP) {
-            convertToWebP(waitOptimizerDirs, config.whiteList)
+            convertToWebp(waitOptimizerDirs, config.whiteList, config.supportFormat)
             if (config.onlyConvert) {
-                log("All pictures have converted to webP...")
+                log("All images have been converted to WebP...")
                 return
             }
         }
-
+        // Calculate the total size of images before and after optimization
         var beforeSize = 0L
         var afterSize = 0L
-        log("Start Optimize...")
+        log("Start optimization...")
         var overLimit = false
         val newOptimizedList = mutableListOf<ImageInfo>()
         for (dir in waitOptimizerDirs) {
@@ -110,45 +110,45 @@ open class OptimizerTask : DefaultTask() {
             if (!file.exists() || !file.isDirectory) {
                 continue
             }
-
             val optimizeResult = startOptimize(file, config, optimizedList)
-            // 如果免费次数已用完, 直接退出
+            // If the free usage limit has been exceeded, exit the loop
             if (optimizeResult.overLimit) {
                 overLimit = true
                 break
             }
-            // 如果没有找到满足条件的, 则压缩下一个目录
+            // If no images meet the criteria, move on to the next directory
             if (optimizeResult.optimizedList.isNullOrEmpty()) {
                 continue
             }
-
             beforeSize += optimizeResult.beforeSize
             afterSize += optimizeResult.afterSize
             newOptimizedList.addAll(optimizeResult.optimizedList)
         }
-
         if (newOptimizedList.isEmpty()) {
             if (!overLimit) {
-                log("No picture need compress!!!")
+                log("No images need to be compressed!!!")
             }
             return
         }
-
-        optimizedList.addAll(newOptimizedList)
+        // Add the newly optimized images to the list of optimized images
+        val finalOptimizedList = optimizedList + newOptimizedList
         if (!optimizedListFile.exists()) {
             optimizedListFile.createNewFile()
         }
-        optimizedListFile.writeText(Gson().toJson(optimizedList), Charset.forName("utf-8"))
+        optimizedListFile.writeText(
+            GsonBuilder().setPrettyPrinting().create().toJson(finalOptimizedList),
+            Charset.forName("utf-8")
+        )
         log(
-            "Task finished! optimized ${newOptimizedList.size} files, before total size: ${
+            "Task finished! Optimized ${newOptimizedList.size} images, before total size: ${
                 beforeSize.formatSize()
-            }, after total size: ${afterSize.formatSize()}, decreased ${(afterSize - beforeSize).formatSize()}"
+            }, after total size: ${afterSize.formatSize()}, decreased ${(beforeSize - afterSize).formatSize()}"
         )
     }
 
     /**
-     * 检查TinyPng Api Key是否可用
-     * @param apiKey: TinyPng Api Key
+     * Check if the TinyPng API Key is valid
+     * @param apiKey: TinyPng API Key
      */
     private fun checkApiKey(apiKey: String): Boolean {
         try {
@@ -158,7 +158,6 @@ open class OptimizerTask : DefaultTask() {
         } catch (e: Exception) {
             log(e.message ?: "")
         }
-
         return false
     }
 
@@ -167,87 +166,87 @@ open class OptimizerTask : DefaultTask() {
     }
 
     /**
-     * 查找所有图片的路径
+     * Find all image directories
+     * @param format: the image file format of found
      */
-    private fun findAllImageDirs() {
+    private fun findAllImageDirs(format: SupportFormatEnum) {
         project.rootProject.allprojects.forEach {
-            // 在每个模块的assets文件夹中查找包含图片的路径
+            // Find image paths in each module's 'assets' folder
             File("${project.rootDir.path}/${it.name}/src/main/assets").apply {
                 if (exists()) {
-                    findImagePath(this)
+                    findImagePath(this, format)
                 }
             }
-
-            // 在每个模块的src文件夹中查找包含图片的路径
+            // Find image paths in each module's 'src' folder
             File("${project.rootDir.path}/${it.name}/src/main/res").apply {
                 if (exists()) {
-                    findImagePath(this)
+                    findImagePath(this, format)
                 }
             }
         }
     }
 
-    /**
-     * 在指定路径下查找包含图片的文件夹
-     * @param directoryFile: 要查找的目录
+    /** Finds directories containing image files under the specified path.
+     * @param directory: directory to search in.
+     * @param format: the image file format of found
      */
-    private fun findImagePath(directoryFile: File) {
-        if (!directoryFile.isDirectory) {
+    private fun findImagePath(directory: File, format: SupportFormatEnum) {
+        if (!directory.isDirectory) {
             return
         }
-
-        directoryFile.listFiles().apply {
-            // 在子目录中查找
-            filter { it.isDirectory }.forEach {
-                findImagePath(it)
+        directory.listFiles()?.apply {
+            // Search in subdirectories.
+            filter { it.isDirectory }.forEach { subDirectory ->
+                findImagePath(subDirectory, format)
             }
-
-            // 判断当前路径是否包含图片
-            val allFiles = filter { !it.isDirectory }
-            for (file in allFiles) {
-                if (file.isImageFile()) {
-                    allImagePathList.add(file.parent)
-                    break
-                }
-            }
+            // Check if current directory contains specific format image files.
+            val imageFile = filter { !it.isDirectory }.find { it.matchedFileFormat(format) }
+            imageFile?.parent?.let { allImagePathList.add(it) }
         }
     }
 
-    /**
-     * 将指定路径的图片转换为WebP格式
-     * @param targetDirs: 要转换的图片目录
+    /* Converts images in specified directories to WebP format
+     * @param targetDirectories: Directories to convert images from
+     * @param whitelist: Optional list of filenames to exclude from conversion
+     * @param format: the image file format of waiting convert
      */
-    private fun convertToWebP(targetDirs: List<String>, whiteList: List<String>?) {
-        for (dir in targetDirs) {
-            val file = File(dir)
+    private fun convertToWebp(
+        targetDirectories: List<String>,
+        whitelist: List<String>?,
+        format: SupportFormatEnum
+    ) {
+        for (directory in targetDirectories) {
+            val file = File(directory)
             if (!file.exists() || !file.isDirectory) {
                 continue
             }
-
-            file.listFiles().asSequence().filter {
-                it.isImageFile()
-                        && !it.name.toLowerCase().endsWith(".webp")
-                        && whiteList?.contains(it.name) != true
-            }.forEach {
-                try {
-                    val result = Tinify.fromFile(it.path).convert(
-                        Options()
-                            .with("type", arrayOf("image/webp"))
-                    )
-                        .result()
-                    result.toFile("${it.parent}/${it.nameWithoutExtension}.${result.extension()}")
-                } catch (e: Exception) {
-                    log(e.message ?: "Occur a exception")
+            file.listFiles().asSequence()
+                .filter {
+                    it.matchedFileFormat(format) &&
+                            !it.name.toLowerCase().endsWith(".webp") &&
+                            whitelist?.contains(it.name) != true
                 }
-            }
+                .forEach {
+                    try {
+                        val result = Tinify.fromFile(it.path)
+                            .convert(Options().with("type", arrayOf("image/webp")))
+                            .result()
+                        result.toFile("${it.parent}/${it.nameWithoutExtension}.${result.extension()}")
+                    } catch (e: Exception) {
+                        log(e.message ?: "An exception occurred")
+                    }
+                }
         }
     }
 
     /**
-     * 开始优化
-     * @param targetDirectory: 待优化的目录
-     * @param config: 优化配置
-     * @param optimizedList: 已优化的列表
+     * Optimizes images in the target directory using the given configuration and list of already
+     * optimized images.Only images that are not in the white list, not already optimized, and
+     * larger than the skip size can be optimized.
+     * @param targetDirectory the directory containing the images to optimize
+     * @param config the configuration options to use for optimization
+     * @param optimizedList the list of already optimized images
+     * @return an OptimizeResult object containing information about the optimization process
      */
     private fun startOptimize(
         targetDirectory: File,
@@ -255,78 +254,97 @@ open class OptimizerTask : DefaultTask() {
         optimizedList: List<ImageInfo>?
     ): OptimizeResult {
         val result = OptimizeResult()
-        // 只有不包含在白名单和已优化列表中, 且图片大小大于skipSize的图片才可进行优化
-        targetDirectory.listFiles().asSequence().filter {
-            it.isImageFile()
-                    && it.length() > config.skipSize
-                    && config.whiteList?.contains(it.name) != true
-                    && optimizedList?.find { it1 -> it1.path == it.path }.run {
-                this == null || md5 != it.getFileMd5()
-            }
-        }.apply {
-            for (file in this) {
-                val beforeSize = file.length()
-                try {
-                    val optimizedFile = Tinify.fromFile(file.path).result()
-                    log("Find target picture -> ${file.path}")
-                    if (beforeSize > 0) {
-                        val compressRatio =
-                            (beforeSize - optimizedFile.size()) * 100.0f / beforeSize
-                        // 图片压缩率低于指定阈值时，忽略压缩结果
-                        if (compressRatio >= 0 && compressRatio < config.compressRatioThreshold) {
-                            continue
+        // Only process image files that meet the conditions for optimization
+        targetDirectory.listFiles()
+            .asSequence()
+            .filter {
+                it.matchedFileFormat(config.supportFormat)
+                        && it.length() > config.skipSize
+                        && config.whiteList?.contains(it.name) != true
+                        && optimizedList?.find { it1 -> it1.path == it.path }.run {
+                    this == null || md5 != it.getFileMd5()
+                }
+            }.apply {
+                for (file in this) {
+                    val beforeSize = file.length()
+                    try {
+                        // Optimize the image using the Tinify API
+                        val optimizedFile = Tinify.fromFile(file.path).result()
+                        log("Find target picture -> ${file.path}")
+                        if (beforeSize > 0) {
+                            val compressRatio =
+                                (beforeSize - optimizedFile.size()) * 100.0f / beforeSize
+                            // 图片压缩率低于指定阈值时，忽略压缩结果
+                            if (compressRatio >= 0 && compressRatio < config.compressRatioThreshold) {
+                                continue
+                            }
                         }
+                        // Write the optimized image to disk
+                        optimizedFile.toFile("${file.path}")
+                        // Add information about the optimized image to the result object
+                        val imageInfo = ImageInfo(
+                            path = file.path,
+                            beforeSize = beforeSize,
+                            afterSize = optimizedFile.size().toLong(),
+                            md5 = file.getFileMd5()
+                        )
+                        result.optimizedList.add(imageInfo)
+                        result.beforeSize += imageInfo.beforeSize
+                        result.afterSize += optimizedFile.size()
+                    } catch (e: AccountException) {
+                        // Handle errors related to the Tinify API account
+                        result.overLimit = true
+                        log(e.message ?: "An exception occurred")
+                        break
+                    } catch (e: Exception) {
+                        // Handle other types of exceptions
+                        log(e.message ?: "An exception occurred")
+                        break
                     }
-
-                    optimizedFile.toFile("${file.path}")
-
-                    val imageInfo = ImageInfo(
-                        path = file.path,
-                        beforeSize = beforeSize,
-                        afterSize = optimizedFile.size().toLong(),
-                        md5 = file.getFileMd5()
-                    )
-                    result.optimizedList.add(imageInfo)
-                    result.beforeSize += imageInfo.beforeSize
-                    result.afterSize += optimizedFile.size()
-                } catch(e: AccountException) {
-                    result.overLimit = true
-                    log(e.message ?: "Occur a exception")
-                    break
-                } catch (e: Exception) {
-                    log(e.message ?: "Occur a exception")
-                    break
                 }
             }
-        }
 
         return result
     }
 
     /**
-     * 获取文件的Md5值
+     * Calculates the MD5 hash of a file.
      */
     private fun File.getFileMd5(): String {
+        // Generate unique key using file path and last modified time
         val key = "${path}${Files.getLastModifiedTime(Paths.get(path)).toMillis()}"
         val digest = MessageDigest.getInstance("MD5")
         val bytes = digest.digest(key.toByteArray(Charset.forName("utf-8")))
+        // Convert byte array to hexadecimal string and pad with zeroes if necessary
         return BigInteger(1, bytes).toString(16).padStart(32, '0')
     }
 
     /**
-     * 该文件是否为图片资源
-     * @return true表示该文件为图片，否则不是
+     * Checks whether the file matches the given format.
+     * @return true if this file type matched; false otherwise.
      */
-    private fun File.isImageFile(): Boolean {
-        return path.toLowerCase().run {
-            endsWith(".webp") || (endsWith(".png") && !contains(".9.")) || endsWith(".jpg") || endsWith(
-                ".jpeg"
-            )
+    private val jpgExtension = "jpg"
+    private fun File.matchedFileFormat(format: SupportFormatEnum): Boolean {
+        val extension = this.extension
+        return when (format) {
+            SupportFormatEnum.SUPPORT_WEBP_ONLY -> extension.equals(WEBP.subtype(), true)
+            SupportFormatEnum.SUPPORT_PNG_ONLY -> extension.equals(PNG.subtype(), true)
+            SupportFormatEnum.SUPPORT_JPEG_ONLY -> extension.equals(
+                JPEG.subtype(),
+                true
+            ) || extension.equals(jpgExtension, true)
+            else -> {
+                when (extension) {
+                    WEBP.subtype(), JPEG.subtype(), jpgExtension -> true
+                    PNG.subtype() -> !this.nameWithoutExtension.contains(".9.")
+                    else -> false
+                }
+            }
         }
     }
 
     /**
-     * 格式化文件大小
+     * Formats file size into a user-readable string
      */
     private fun Long.formatSize(): String {
         val df = DecimalFormat("#.00")
